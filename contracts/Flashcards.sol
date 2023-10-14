@@ -9,8 +9,8 @@ contract Flashcards {
     event FlashcardAdded(address indexed _from, string _question, string _answer, uint256 _timestamp);
     event FlashcardRemoved(address indexed _from, string _question, uint256 _timestamp);
 
-    constructor() {
-        owner = msg.sender;
+    constructor(address _owner) {
+        owner = _owner;
     }
 
     modifier onlyOwner() {

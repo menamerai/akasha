@@ -8,3 +8,8 @@ typechain-types
 #Hardhat files
 cache*
 artifacts*
+
+# testing files
+/contracts-dbg
+/artifacts-dbg
+dbg.project.json
