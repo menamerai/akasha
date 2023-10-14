@@ -17,8 +17,10 @@ contract Record {
     uint256 public timestamp;
     mapping(address => mapping(string => string)) public flashcards;
     mapping(address => string[]) public questions;
-    
 
+    event FlashcardAdded(address indexed _from, string _question, string _answer, uint256 _timestamp);
+    event FlashcardRemoved(address indexed _from, string _question, uint256 _timestamp);
+    
     constructor(
         string memory _title,
         string memory _description
@@ -27,10 +29,6 @@ contract Record {
         title = _title;
         description = _description;
         timestamp = block.timestamp;
-    }
-
-    function getAllQuestions() public view returns (string[] memory) {
-        return questions[msg.sender];
     }
 
     function addFlashcard(string memory _question, string memory _answer) public {
@@ -44,6 +42,7 @@ contract Record {
         // add the question and answer to the mapping
         flashcards[msg.sender][_question] = _answer;
         questions[msg.sender].push(_question);
+        emit FlashcardAdded(msg.sender, _question, _answer, block.timestamp);
     }
 
     function removeFlashcard(string memory _question) public {
@@ -65,8 +64,14 @@ contract Record {
                 delete questions[msg.sender][i];
             }
         }
+        emit FlashcardRemoved(msg.sender, _question, block.timestamp);
     }
 
+    function getAllQuestions() public view returns (string[] memory) {
+        return questions[msg.sender];
+    }
+    
+    /*
     function getAllFlashcards() public view returns (string[] memory, string[] memory) {
         string[] memory _questions = questions[msg.sender];
         string[] memory _answers = new string[](_questions.length);
@@ -75,4 +80,5 @@ contract Record {
         }
         return (_questions, _answers);
     }
+    */
 }
