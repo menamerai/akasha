@@ -10,11 +10,20 @@ contract Akasha {
         uint256 timestamp;
         uint256 recordId;
     }
+    struct Flashcard {
+        address owner;
+        string question;
+        string answer;
+        uint256 timestamp;
+        uint256 correspondingRecordId;
+        uint256 flashcardId;
+    }
     Record[] public records;
-    mapping(uint256 => mapping(address => mapping(string => string))) public flashcards;
-    mapping(uint256 => mapping(address => string[])) public questions;
+    uint256 public recordCount;
+    Flashcard[] public flashcards;
     mapping(uint256 => address[]) public flashcardOwners;
     mapping(address => uint256[]) public recordIds;
+    mapping(address => uint256[]) public flashcardIds;
 
     event RecordAdded(address indexed _from, string _title, string _description, uint256 _timestamp, uint256 _recordId);
     event RecordUpdated(address indexed _from, string _oldTitle, string _oldDescription, string _newTitle, string _newDescription, uint256 _timestamp, uint256 _recordId);
@@ -22,22 +31,35 @@ contract Akasha {
     event FlashcardAdded(address indexed _from, string _question, string _answer, uint256 _timestamp, uint256 _recordId);
     event FlashcardRemoved(address indexed _from, string _question, uint256 _timestamp, uint256 _recordId);
 
-    function generateRecordId() private view returns (uint256) {
+    // helper functions
+
+    function generateId(bool isRecord) private view returns (uint256) {
         uint256 randId = uint256(keccak256(abi.encodePacked(block.timestamp, block.difficulty, msg.sender)));
         // check if recordId already exists
-        for (uint256 i = 0; i < records.length; i++) {
-            if (records[i].recordId == randId) {
-                return generateRecordId();
+        if (isRecord) {
+            for (uint256 i = 0; i < records.length; i++) {
+                if (records[i].recordId == randId) {
+                    randId = generateId(isRecord);
+                }
+            }
+        } else {
+            for (uint256 i = 0; i < flashcards.length; i++) {
+                if (flashcards[i].flashcardId == randId) {
+                    randId = generateId(isRecord);
+                }
             }
         }
         return randId;
     }
 
+    // record functions
+
     function addRecord(string memory _title, string memory _description) public {
-        uint256 _recordId = generateRecordId();
+        uint256 _recordId = generateId(true);
         Record memory record = Record(msg.sender, _title, _description, block.timestamp, _recordId);
         records.push(record);
         recordIds[msg.sender].push(_recordId);
+        recordCount++;
         emit RecordAdded(msg.sender, _title, _description, block.timestamp, _recordId);
     }
 
@@ -62,85 +84,136 @@ contract Akasha {
     }
 
     function removeRecord(uint256 _recordId) public { // this is so gas inefficient it's not even funny
-        Record memory record = findRecord(_recordId);
-        require(msg.sender == record.owner, "Only the owner can remove the record");
+        delete flashcardOwners[_recordId];
+        uint256[] memory _flashcardIds = flashcardIds[msg.sender];
+        for (uint256 i = 0; i < _flashcardIds.length; i++) { // this is giving me a headache
+            removeFlashcard(_flashcardIds[i]);
+        }
+        bool found = false;
         for (uint256 i = 0; i < records.length; i++) {
-            if (records[i].recordId == _recordId) {
-                // delete all flashcards from all flashcardOwners
-                for (uint256 j = 0; j < flashcardOwners[_recordId].length; j++) {
-                    for (uint256 k = 0; k < questions[_recordId][flashcardOwners[_recordId][j]].length; k++) {
-                        delete flashcards[_recordId][flashcardOwners[_recordId][j]][questions[_recordId][flashcardOwners[_recordId][j]][k]];
-                        emit FlashcardRemoved(msg.sender, questions[_recordId][flashcardOwners[_recordId][j]][k], block.timestamp, _recordId);
-                    }
-                    delete questions[_recordId][flashcardOwners[_recordId][j]];
+            if (_recordId == records[i].recordId) {
+                found = true;
+                Record memory record = records[i];
+                require(msg.sender == record.owner, "Only the owner can remove the record");
+                string memory _title = record.title;
+                string memory _description = record.description;
+                record.timestamp = block.timestamp;
+                // remove record from records manually
+                for (uint256 j = i; j < records.length - 1; j++) {
+                    records[j] = records[j + 1];
                 }
-                delete flashcardOwners[_recordId];
-                records[i] = records[records.length - 1];
                 records.pop();
-                break;
+                recordCount--;
+                emit RecordRemoved(msg.sender, _title, _description, block.timestamp, _recordId);
             }
         }
-        emit RecordRemoved(msg.sender, record.title, record.description, block.timestamp, _recordId);
+        require(found, "Record not found");
+        for (uint256 i = 0; i < recordIds[msg.sender].length; i++) {
+            if (recordIds[msg.sender][i] == _recordId) {
+                for (uint256 j = i; j < recordIds[msg.sender].length - 1; j++) {
+                    recordIds[msg.sender][j] = recordIds[msg.sender][j + 1];
+                }
+                recordIds[msg.sender].pop();
+            }
+        }
     }
 
-    function addFlashcardToRecord(uint256 _recordId, string memory _question, string memory _answer) public {
-        Record memory record = findRecord(_recordId); // check if record exists
-        // add user to flashcardOwners if not already added
-        bool userExists = false;
+    function getAllRecordsFromAddress(address _owner) public view returns (Record[] memory) {
+        Record[] memory _records = new Record[](recordIds[_owner].length);
+        for (uint256 i = 0; i < recordIds[_owner].length; i++) {
+            _records[i] = findRecord(recordIds[_owner][i]);
+        }
+        return _records;
+    }
+
+    // flashcard functions
+
+    function addFlashcard(uint256 _recordId, string memory _question, string memory _answer) public {
+        Record memory record = findRecord(_recordId);
+        uint256 _flashcardId = generateId(false);
+        Flashcard memory flashcard = Flashcard(msg.sender, _question, _answer, block.timestamp, _recordId, _flashcardId);
+        flashcards.push(flashcard);
+        flashcardIds[msg.sender].push(_flashcardId);
+        // add msg.sender to flashcardOwners if not already there
+        bool found = false;
         for (uint256 i = 0; i < flashcardOwners[_recordId].length; i++) {
             if (flashcardOwners[_recordId][i] == msg.sender) {
-                userExists = true;
-                break;
+                found = true;
             }
         }
-        if (!userExists) {
+        if (!found) {
             flashcardOwners[_recordId].push(msg.sender);
         }
-        // add flashcard to user's flashcards
-        flashcards[_recordId][msg.sender][_question] = _answer;
-        questions[_recordId][msg.sender].push(_question);
         emit FlashcardAdded(msg.sender, _question, _answer, block.timestamp, _recordId);
     }
 
-    function removeFlashcardFromRecord(uint256 _recordId, string memory _question) public {
-        require(bytes(flashcards[_recordId][msg.sender][_question]).length > 0, "Flashcard does not exist");
-        Record memory record = findRecord(_recordId); // check if record exists
-        // remove flashcard from user's flashcards
-        delete flashcards[_recordId][msg.sender][_question];
-        for (uint256 i = 0; i < questions[_recordId][msg.sender].length; i++) {
-            if (keccak256(abi.encodePacked(questions[_recordId][msg.sender][i])) == keccak256(abi.encodePacked(_question))) {
-                questions[_recordId][msg.sender][i] = questions[_recordId][msg.sender][questions[_recordId][msg.sender].length - 1];
-                questions[_recordId][msg.sender].pop();
-                break;
+    function updateFlashcard(uint256 _flashcardId, string memory _newTitle, string memory _newDesc) public {
+        bool found = false;
+        for (uint256 i = 0; i < flashcards.length; i++) {
+            if (flashcards[i].flashcardId == _flashcardId) {
+                require(msg.sender == flashcards[i].owner, "Only the owner can update the flashcard");
+                found = true;
+                Flashcard storage flashcard = flashcards[i];
+                string memory _oldTitle = flashcards[i].question;
+                string memory _oldDesc = flashcards[i].answer;
+                flashcard.question = _newTitle;
+                flashcard.answer = _newDesc;
+                flashcard.timestamp = block.timestamp;
+                emit RecordUpdated(msg.sender, _oldTitle, _oldDesc, _newTitle, _newDesc, block.timestamp, _flashcardId);
             }
         }
-        emit FlashcardRemoved(msg.sender, _question, block.timestamp, _recordId);
+        require(found, "Flashcard not found");
     }
 
-    function getAllFlashcardsFromRecord(uint256 _recordId) public view returns (string[] memory, string[] memory) {
-        Record memory record = findRecord(_recordId); // check if record exists
-        // get all flashcards from user's flashcards
-        string[] memory _questions = new string[](questions[_recordId][msg.sender].length);
-        string[] memory _answers = new string[](questions[_recordId][msg.sender].length);
-        for (uint256 i = 0; i < questions[_recordId][msg.sender].length; i++) {
-            _questions[i] = questions[_recordId][msg.sender][i];
-            _answers[i] = flashcards[_recordId][msg.sender][questions[_recordId][msg.sender][i]];
+    function removeFlashcard(uint256 _flashcardId) public { // by gods this is awful
+        bool found = false;
+        // look for flashcard in flashcardIds
+        for (uint256 i = 0; i < flashcardIds[msg.sender].length; i++) {
+            if (flashcardIds[msg.sender][i] == _flashcardId) {
+                found = true;
+                for (uint256 j = i; j < flashcardIds[msg.sender].length - 1; j++) {
+                    flashcardIds[msg.sender][j] = flashcardIds[msg.sender][j + 1];
+                }
+                flashcardIds[msg.sender].pop();
+            }
         }
-        return (_questions, _answers);
+        require (found, "Flashcard not found");
+        // look for flashcard in flashcards
+        for (uint256 i = 0; i < flashcards.length; i++) {
+            if (flashcards[i].flashcardId == _flashcardId) {
+                require(msg.sender == flashcards[i].owner, "Only the owner can remove the flashcard");
+                found = true;
+                uint256 _recordId = flashcards[i].correspondingRecordId;
+                // remove flashcard from flashcards manually
+                for (uint256 j = i; j < flashcards.length - 1; j++) {
+                    flashcards[j] = flashcards[j + 1];
+                }
+                flashcards.pop();
+                // delete owner from flashcardOwners if no more flashcards
+                if (flashcardOwners[_recordId].length == 0) {
+                    for (uint256 j = 0; j < flashcardOwners[_recordId].length; j++) {
+                        if (flashcardOwners[_recordId][j] == msg.sender) {
+                            for (uint256 k = j; k < flashcardOwners[_recordId].length - 1; k++) {
+                                flashcardOwners[_recordId][k] = flashcardOwners[_recordId][k + 1];
+                            }
+                            flashcardOwners[_recordId].pop();
+                        }
+                    }
+                }
+                emit FlashcardRemoved(msg.sender, flashcards[i].question, block.timestamp, _flashcardId);
+            }
+        }
     }
 
-    function getAllRecordsFromAddress(address _address) public view returns (uint256[] memory, string[] memory, string[] memory, uint256[] memory) {
-        require(recordIds[_address].length > 0, "No records found");
-        uint256[] memory _recordIds = new uint256[](recordIds[_address].length);
-        string[] memory _titles = new string[](recordIds[_address].length);
-        string[] memory _descriptions = new string[](recordIds[_address].length);
-        uint256[] memory _timestamps = new uint256[](recordIds[_address].length);
-        for (uint256 i = 0; i < recordIds[_address].length; i++) {
-            _recordIds[i] = records[i].recordId;
-            _titles[i] = records[i].title;
-            _descriptions[i] = records[i].description;
-            _timestamps[i] = records[i].timestamp;
+    function getAllFlashcardsFromRecord(uint256 _recordId) public view returns (Flashcard[] memory) {
+        Flashcard[] memory _flashcards = new Flashcard[](flashcardOwners[_recordId].length);
+        for (uint256 i = 0; i < flashcardOwners[_recordId].length; i++) {
+            for (uint256 j = 0; j < flashcards.length; j++) {
+                if (flashcards[j].owner == flashcardOwners[_recordId][i]) {
+                    _flashcards[i] = flashcards[j];
+                }
+            }
         }
-        return (_recordIds, _titles, _descriptions, _timestamps);
+        return _flashcards;
     }
 }
