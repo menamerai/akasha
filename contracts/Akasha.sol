@@ -41,7 +41,7 @@ contract Akasha {
         emit RecordAdded(msg.sender, _title, _description, block.timestamp, _recordId);
     }
 
-    function findRecord(uint256 _recordId) private view returns (Record memory) {
+    function findRecord(uint256 _recordId) private view returns (Record storage) {
         for (uint256 i = 0; i < records.length; i++) {
             if (records[i].recordId == _recordId) {
                 return records[i];
@@ -51,7 +51,7 @@ contract Akasha {
     }
 
     function updateRecord(uint256 _recordId, string memory _title, string memory _description) public {
-        Record memory record = findRecord(_recordId);
+        Record storage record = findRecord(_recordId);
         require(msg.sender == record.owner, "Only the owner can update the record");
         string memory _oldTitle = record.title;
         string memory _oldDescription = record.description;
@@ -130,6 +130,7 @@ contract Akasha {
     }
 
     function getAllRecordsFromAddress(address _address) public view returns (uint256[] memory, string[] memory, string[] memory, uint256[] memory) {
+        require(recordIds[_address].length > 0, "No records found");
         uint256[] memory _recordIds = new uint256[](recordIds[_address].length);
         string[] memory _titles = new string[](recordIds[_address].length);
         string[] memory _descriptions = new string[](recordIds[_address].length);
