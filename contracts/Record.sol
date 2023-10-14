@@ -1,84 +1,42 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.9;
 
-// Uncomment this line to use console.log
-import "hardhat/console.sol";
-
-// A contract called Record that contains information on a certain subject - like a wiki page
-// it has a title, description, and timestamp
-// There should also include a mapping that maps an address to a question - answer tuple pair
-// representing a flashcard question and answer added by the user
-// try to keep the contract as simple and as gas efficient as possible
+import "./Flashcards.sol";
 
 contract Record {
     address public owner;
     string public title;
     string public description;
-    uint256 public timestamp;
-    mapping(address => mapping(string => string)) public flashcards;
-    mapping(address => string[]) public questions;
+    mapping(address => Flashcards) public flashcards;
 
-    event FlashcardAdded(address indexed _from, string _question, string _answer, uint256 _timestamp);
-    event FlashcardRemoved(address indexed _from, string _question, uint256 _timestamp);
-    
-    constructor(
-        string memory _title,
-        string memory _description
-    ) {
+    event RecordUpdated(address indexed _from, string _oldTitle, string _oldDescription, string _newTitle, string _newDescription, uint256 _timestamp);
+
+    constructor(string memory _title, string memory _description) {
         owner = msg.sender;
         title = _title;
         description = _description;
-        timestamp = block.timestamp;
+    }
+
+    function update(string memory _title, string memory _description) public {
+        require(msg.sender == owner, "Only the owner can update the record");
+        string memory _oldTitle = title;
+        string memory _oldDescription = description;
+        title = _title;
+        description = _description;
+        emit RecordUpdated(msg.sender, _oldTitle, _oldDescription, _title, _description, block.timestamp);
     }
 
     function addFlashcard(string memory _question, string memory _answer) public {
-        // check if the question is already in the mapping
-        require(
-            keccak256(abi.encodePacked(flashcards[msg.sender][_question])) ==
-                keccak256(abi.encodePacked("")),
-            "Question already exists"
-        );
-
-        // add the question and answer to the mapping
-        flashcards[msg.sender][_question] = _answer;
-        questions[msg.sender].push(_question);
-        emit FlashcardAdded(msg.sender, _question, _answer, block.timestamp);
+        // add user to flashcards mapping if not already added
+        if (flashcards[msg.sender] == Flashcards(address(0))) {
+            flashcards[msg.sender] = new Flashcards();
+        }
+        // add flashcard to user's flashcards
+        flashcards[msg.sender].addFlashcard(_question, _answer);
     }
 
     function removeFlashcard(string memory _question) public {
-        // check if the question is already in the mapping
-        require(
-            keccak256(abi.encodePacked(flashcards[msg.sender][_question])) !=
-                keccak256(abi.encodePacked("")),
-            "Question does not exist"
-        );
-
-        // remove the question and answer from the mapping
-        delete flashcards[msg.sender][_question];
-        // remove the question from the questions array
-        for (uint256 i = 0; i < questions[msg.sender].length; i++) {
-            if (
-                keccak256(abi.encodePacked(questions[msg.sender][i])) ==
-                keccak256(abi.encodePacked(_question))
-            ) {
-                delete questions[msg.sender][i];
-            }
-        }
-        emit FlashcardRemoved(msg.sender, _question, block.timestamp);
+        // remove flashcard from user's flashcards
+        flashcards[msg.sender].removeFlashcard(_question);
     }
-
-    function getAllQuestions() public view returns (string[] memory) {
-        return questions[msg.sender];
-    }
-    
-    /*
-    function getAllFlashcards() public view returns (string[] memory, string[] memory) {
-        string[] memory _questions = questions[msg.sender];
-        string[] memory _answers = new string[](_questions.length);
-        for (uint256 i = 0; i < _questions.length; i++) {
-            _answers[i] = flashcards[msg.sender][_questions[i]];
-        }
-        return (_questions, _answers);
-    }
-    */
 }
