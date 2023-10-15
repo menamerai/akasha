@@ -10,6 +10,7 @@
     "hardhat": "^2.13.0"
   },
   "dependencies": {
+    "@nomicfoundation/hardhat-network-helpers": "^1.0.9",
     "@thirdweb-dev/contracts": "^3.8.0",
     "big-integer": "^1.6.51",
     "zksync-web3": "^0.14.3"

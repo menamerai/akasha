@@ -1,5 +1,13 @@
 // SPDX-License-Identifier: MIT
+
+/**
+ * @title Akasha
+ * @dev The Akasha contract stores instances of Records, which represent a piece of knowledge. 
+ * Users can add Flashcards for these Records, which each contain a question and an answer.
+ */
+
 pragma solidity ^0.8.9;
+
 
 contract Akasha {
 
@@ -18,6 +26,7 @@ contract Akasha {
         uint256 correspondingRecordId;
         uint256 flashcardId;
     }
+
     Record[] public records;
     uint256 public recordCount;
     Flashcard[] public flashcards;
@@ -36,6 +45,8 @@ contract Akasha {
     function generateId(bool isRecord) private view returns (uint256) {
         uint256 randId = uint256(keccak256(abi.encodePacked(block.timestamp, block.difficulty, msg.sender)));
         // check if recordId already exists
+        // two instances of recordId and flashcardId can be the same, 
+        // but not two instances of recordId or two instances of flashcardId
         if (isRecord) {
             for (uint256 i = 0; i < records.length; i++) {
                 if (records[i].recordId == randId) {
@@ -85,10 +96,6 @@ contract Akasha {
 
     function removeRecord(uint256 _recordId) public { // this is so gas inefficient it's not even funny
         delete flashcardOwners[_recordId];
-        uint256[] memory _flashcardIds = flashcardIds[msg.sender];
-        for (uint256 i = 0; i < _flashcardIds.length; i++) { // this is giving me a headache
-            removeFlashcard(_flashcardIds[i]);
-        }
         bool found = false;
         for (uint256 i = 0; i < records.length; i++) {
             if (_recordId == records[i].recordId) {
@@ -116,12 +123,24 @@ contract Akasha {
                 recordIds[msg.sender].pop();
             }
         }
+        uint256[] memory _flashcardIds = flashcardIds[msg.sender];
+        for (uint256 i = 0; i < _flashcardIds.length; i++) { // this is giving me a headache
+            removeFlashcard(_flashcardIds[i]);
+        }
     }
 
     function getAllRecordsFromAddress(address _owner) public view returns (Record[] memory) {
         Record[] memory _records = new Record[](recordIds[_owner].length);
         for (uint256 i = 0; i < recordIds[_owner].length; i++) {
             _records[i] = findRecord(recordIds[_owner][i]);
+        }
+        return _records;
+    }
+
+    function getAllRecords() public view returns (Record[] memory) {
+        Record[] memory _records = new Record[](records.length);
+        for (uint256 i = 0; i < records.length; i++) {
+            _records[i] = records[i];
         }
         return _records;
     }
@@ -167,6 +186,7 @@ contract Akasha {
 
     function removeFlashcard(uint256 _flashcardId) public { // by gods this is awful
         bool found = false;
+        bool noMoreFlashcards = false;
         // look for flashcard in flashcardIds
         for (uint256 i = 0; i < flashcardIds[msg.sender].length; i++) {
             if (flashcardIds[msg.sender][i] == _flashcardId) {
@@ -174,7 +194,11 @@ contract Akasha {
                 for (uint256 j = i; j < flashcardIds[msg.sender].length - 1; j++) {
                     flashcardIds[msg.sender][j] = flashcardIds[msg.sender][j + 1];
                 }
-                flashcardIds[msg.sender].pop();
+                if (flashcardIds[msg.sender].length > 0) {
+                    flashcardIds[msg.sender].pop();
+                } else {
+                    noMoreFlashcards = true;
+                }
             }
         }
         require (found, "Flashcard not found");
@@ -184,33 +208,41 @@ contract Akasha {
                 require(msg.sender == flashcards[i].owner, "Only the owner can remove the flashcard");
                 found = true;
                 uint256 _recordId = flashcards[i].correspondingRecordId;
+                string memory _question = flashcards[i].question;
                 // remove flashcard from flashcards manually
                 for (uint256 j = i; j < flashcards.length - 1; j++) {
                     flashcards[j] = flashcards[j + 1];
                 }
-                flashcards.pop();
+                if (flashcards.length > 0) {
+                    flashcards.pop();
+                }
                 // delete owner from flashcardOwners if no more flashcards
-                if (flashcardOwners[_recordId].length == 0) {
+                if (noMoreFlashcards) {
                     for (uint256 j = 0; j < flashcardOwners[_recordId].length; j++) {
                         if (flashcardOwners[_recordId][j] == msg.sender) {
                             for (uint256 k = j; k < flashcardOwners[_recordId].length - 1; k++) {
                                 flashcardOwners[_recordId][k] = flashcardOwners[_recordId][k + 1];
                             }
-                            flashcardOwners[_recordId].pop();
+                            if (flashcardOwners[_recordId].length > 0) {
+                                flashcardOwners[_recordId].pop();
+                            }
                         }
                     }
                 }
-                emit FlashcardRemoved(msg.sender, flashcards[i].question, block.timestamp, _flashcardId);
+                emit FlashcardRemoved(msg.sender, _question, block.timestamp, _flashcardId);
             }
         }
     }
 
     function getAllFlashcardsFromRecord(uint256 _recordId) public view returns (Flashcard[] memory) {
-        Flashcard[] memory _flashcards = new Flashcard[](flashcardOwners[_recordId].length);
-        for (uint256 i = 0; i < flashcardOwners[_recordId].length; i++) {
-            for (uint256 j = 0; j < flashcards.length; j++) {
-                if (flashcards[j].owner == flashcardOwners[_recordId][i]) {
-                    _flashcards[i] = flashcards[j];
+        Flashcard[] memory _flashcards = new Flashcard[](flashcardIds[msg.sender].length);
+        for (uint256 i = 0; i < flashcards.length; i++) {
+            if (flashcards[i].correspondingRecordId == _recordId) {
+                for (uint256 j = 0; j < _flashcards.length; j++) {
+                    if (_flashcards[j].owner == address(0)) {
+                        _flashcards[j] = flashcards[i];
+                        break;
+                    }
                 }
             }
         }
