@@ -66,6 +66,7 @@ contract Akasha {
     // record functions
 
     function addRecord(string memory _title, string memory _description) public {
+        // add record to records
         uint256 _recordId = generateId(true);
         Record memory record = Record(msg.sender, _title, _description, block.timestamp, _recordId);
         records.push(record);
@@ -75,6 +76,8 @@ contract Akasha {
     }
 
     function findRecord(uint256 _recordId) private view returns (Record storage) {
+        // find record in records using its recordId
+        // useful to validate that the record exists
         for (uint256 i = 0; i < records.length; i++) {
             if (records[i].recordId == _recordId) {
                 return records[i];
@@ -84,7 +87,8 @@ contract Akasha {
     }
 
     function updateRecord(uint256 _recordId, string memory _title, string memory _description) public {
-        Record storage record = findRecord(_recordId);
+        // update record in records using its recordId
+        Record storage record = findRecord(_recordId); // for persistent change
         require(msg.sender == record.owner, "Only the owner can update the record");
         string memory _oldTitle = record.title;
         string memory _oldDescription = record.description;
@@ -95,7 +99,12 @@ contract Akasha {
     }
 
     function removeRecord(uint256 _recordId) public { // this is so gas inefficient it's not even funny
+        // remove record from records using its recordId
+        // also remove all flashcards associated with the record
+        
+        // get rid of flashcardOwners first since every flashcards will be removed
         delete flashcardOwners[_recordId];
+        // find record and remove it
         bool found = false;
         for (uint256 i = 0; i < records.length; i++) {
             if (_recordId == records[i].recordId) {
@@ -115,6 +124,7 @@ contract Akasha {
             }
         }
         require(found, "Record not found");
+        // remove recordId from recordIds
         for (uint256 i = 0; i < recordIds[msg.sender].length; i++) {
             if (recordIds[msg.sender][i] == _recordId) {
                 for (uint256 j = i; j < recordIds[msg.sender].length - 1; j++) {
@@ -123,6 +133,7 @@ contract Akasha {
                 recordIds[msg.sender].pop();
             }
         }
+        // remove flashcards associated with the record
         uint256[] memory _flashcardIds = flashcardIds[msg.sender];
         for (uint256 i = 0; i < _flashcardIds.length; i++) { // this is giving me a headache
             removeFlashcard(_flashcardIds[i]);
@@ -130,6 +141,8 @@ contract Akasha {
     }
 
     function getAllRecordsFromAddress(address _owner) public view returns (Record[] memory) {
+        // get all records from an address, 
+        // useful as a getter function for the user in the frontend
         Record[] memory _records = new Record[](recordIds[_owner].length);
         for (uint256 i = 0; i < recordIds[_owner].length; i++) {
             _records[i] = findRecord(recordIds[_owner][i]);
@@ -138,6 +151,8 @@ contract Akasha {
     }
 
     function getAllRecords() public view returns (Record[] memory) {
+        // get all records,
+        // useful as a getter function to display a "marketplace" of records
         Record[] memory _records = new Record[](records.length);
         for (uint256 i = 0; i < records.length; i++) {
             _records[i] = records[i];
@@ -148,7 +163,8 @@ contract Akasha {
     // flashcard functions
 
     function addFlashcard(uint256 _recordId, string memory _question, string memory _answer) public {
-        Record memory record = findRecord(_recordId);
+        // add flashcard to specific record
+        Record memory record = findRecord(_recordId); // check if record exists
         uint256 _flashcardId = generateId(false);
         Flashcard memory flashcard = Flashcard(msg.sender, _question, _answer, block.timestamp, _recordId, _flashcardId);
         flashcards.push(flashcard);
@@ -167,12 +183,14 @@ contract Akasha {
     }
 
     function updateFlashcard(uint256 _flashcardId, string memory _newTitle, string memory _newDesc) public {
+        // update flashcard in flashcards using its flashcardId
+        // find flashcardId first
         bool found = false;
         for (uint256 i = 0; i < flashcards.length; i++) {
             if (flashcards[i].flashcardId == _flashcardId) {
                 require(msg.sender == flashcards[i].owner, "Only the owner can update the flashcard");
                 found = true;
-                Flashcard storage flashcard = flashcards[i];
+                Flashcard storage flashcard = flashcards[i]; // for persistent change
                 string memory _oldTitle = flashcards[i].question;
                 string memory _oldDesc = flashcards[i].answer;
                 flashcard.question = _newTitle;
@@ -185,6 +203,9 @@ contract Akasha {
     }
 
     function removeFlashcard(uint256 _flashcardId) public { // by gods this is awful
+        // remove flashcard from flashcards using its flashcardId
+        // there is a lot of things you need to do to remove a flashcard
+        // firstly, check if the flashcard exists and remove it from flashcardIds
         bool found = false;
         bool noMoreFlashcards = false;
         // look for flashcard in flashcardIds
@@ -235,6 +256,8 @@ contract Akasha {
     }
 
     function getAllFlashcardsFromRecord(uint256 _recordId) public view returns (Flashcard[] memory) {
+        // get all flashcards from a record,
+        // useful as a getter function for the user in the frontend
         Flashcard[] memory _flashcards = new Flashcard[](flashcardIds[msg.sender].length);
         for (uint256 i = 0; i < flashcards.length; i++) {
             if (flashcards[i].correspondingRecordId == _recordId) {
