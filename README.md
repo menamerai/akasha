@@ -1,47 +1,15 @@
-## Getting Started
+# Akasha
 
-Create a project using this example:
+Akasha is a Solidity smart contract that allows users to store knowledge and related flashcards on the blockchain. This project is a submission for The Graph Hackathon @UC 2023.
 
-```bash
-npx thirdweb create --contract --template hardhat-javascript-starter
-```
+## Installation
 
-You can start editing the page by modifying `contracts/Contract.sol`.
+To run and deploy the project, you will need to use thirdweb. First, run `yarn build` to build the project, then run `yarn deploy` to deploy it.
 
-To add functionality to your contracts, you can use the `@thirdweb-dev/contracts` package which provides base contracts and extensions to inherit. The package is already installed with this project. Head to our [Contracts Extensions Docs](https://portal.thirdweb.com/contractkit) to learn more.
+## Usage
 
-## Building the project
+Once the project is deployed, users can interact with the Akasha smart contract to store and retrieve knowledge and flashcards on the blockchain.
 
-After any changes to the contract, run:
+## License
 
-```bash
-npm run build
-# or
-yarn build
-```
-
-to compile your contracts. This will also detect the [Contracts Extensions Docs](https://portal.thirdweb.com/contractkit) detected on your contract.
-
-## Deploying Contracts
-
-When you're ready to deploy your contracts, just run one of the following command to deploy you're contracts:
-
-```bash
-npm run deploy
-# or
-yarn deploy
-```
-
-## Releasing Contracts
-
-If you want to release a version of your contracts publicly, you can use one of the followings command:
-
-```bash
-npm run release
-# or
-yarn release
-```
-
-## Join our Discord!
-
-For any questions, suggestions, join our discord at [https://discord.gg/thirdweb](https://discord.gg/thirdweb).
+This project is licensed under the MIT License.
